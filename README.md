@@ -1,2 +1,4 @@
 # myproject
-Some single projects
+Content : some single projects
+Programming language : c/c++
+Development environment : vscode
