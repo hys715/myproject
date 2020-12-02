@@ -18,7 +18,7 @@ private:
     int buffer, bits_counter, eof_counter;
 
 public:
-    // op主要判断Bits用于输入还是输出
+    // 初始化
     Bits() : buffer(0), bits_counter(0), eof_counter(0) {}
 
     // 读入一个bit
