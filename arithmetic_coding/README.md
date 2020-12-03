@@ -100,7 +100,7 @@ low = low + range * 0 / total = 0101 0000
 调整频数，a:3，b:2，c:1，total:6，sum_freq(a) = 3，sum_freq(b) = 5，sum_freq(c) = 6  
 low和high不符合3)  
 但是low和high的最高位不一致，无法一起左移，这时候就需要将区间进行适当的放缩，如下图(First_qtr=0100 0000, Half=1000 0000, Third_qtr=1100 0000)    
-![](https://github.com/hys715/myproject/tree/master/arithmetic_coding/image/1.png)  
+![](https://github.com/hys715/myproject/blob/master/arithmetic_coding/image/1.png)  
 具体的做法为:  
 low = (low - First_qtr) * 2 = 2 * low - Half = 0011 0000  
 high = (high - First_qtr) * 2 + 1 = 2 * high - Half + 1 = 1100 1010  
