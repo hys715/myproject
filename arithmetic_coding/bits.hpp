@@ -1,5 +1,5 @@
-#ifndef BITS
-#define BITS
+#ifndef BITS_H
+#define BITS_H
 
 #include <iostream>
 #include <fstream>
