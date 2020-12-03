@@ -69,6 +69,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    char head[3] = {'A', 'R', 'C'}; // 压缩文件的头部标识
+    fout.write((char*)head, sizeof(head));
+
     char ch;
     int symbol;
     fin.read(&ch, sizeof(char));    // 读字节开始编码

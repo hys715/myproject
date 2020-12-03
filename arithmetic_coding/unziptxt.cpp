@@ -70,6 +70,14 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // 识别文件头部标识
+    char head[3];
+    fin.read((char*)head, sizeof(head));
+    if (head[0] != 'A' || head[1] != 'R' || head[2] != 'C') {
+        cerr << "Bad input file\n";
+        return -1;
+    }
+
     char ch;
     int symbol;
     // 预处理
