@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
     // 异常处理
     if (argc < 3 || argc > 3) cerr << "Command error!\n";
     string srcFile(argv[1]), tarFile(argv[2]);
-    srcFile += ".txt", tarFile += ".arc";
+    srcFile += ".arc", tarFile += ".txt";
     ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
     if (!fin.is_open() || !fout.is_open()) return -1;
