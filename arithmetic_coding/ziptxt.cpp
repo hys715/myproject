@@ -62,7 +62,10 @@ int main(int argc, char* argv[]) {
     srcFile += ".txt", tarFile += ".arc";
     ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
-    if (!fin.is_open() || !fout.is_open()) return -1;
+    if (!fin.is_open() || !fout.is_open()) {
+        cerr << "Fail to open files!\n";
+        return -1;
+    }
 
     // 正式编码
     start_model();

@@ -345,7 +345,10 @@ int main(int argc, char* argv[]) {
     srcFile += ".txt", tarFile += ".arc";
     ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
-    if (!fin.is_open() || !fout.is_open()) return -1;
+    if (!fin.is_open() || !fout.is_open()) {
+        cerr << "Fail to open files!\n";
+        return -1;
+    }
 
     // 正式编码
     start_model();
@@ -396,6 +399,7 @@ int decode_symbol(ifstream& fin) {
     int cum = ((value - low + 1) * cum_freq[0] - 1) / range; // value占比
     int symbol = 1;
     while (cum_freq[symbol] > cum) ++symbol;    // 查找
+    if (symbol == EOF_symbol) return symbol;
     high = low + range * cum_freq[symbol - 1] / cum_freq[0] - 1;    // 更新
     low = low + range * cum_freq[symbol] / cum_freq[0];
     while (true) {
@@ -428,7 +432,10 @@ int main(int argc, char* argv[]) {
     srcFile += ".arc", tarFile += ".txt";
     ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
-    if (!fin.is_open() || !fout.is_open()) return -1;
+    if (!fin.is_open() || !fout.is_open()) {
+        cerr << "Fail to open files!\n";
+        return -1;
+    }
 
     // 正式解码
     start_model();
@@ -437,8 +444,8 @@ int main(int argc, char* argv[]) {
     while (true) {
         int ch, symbol;
         symbol = decode_symbol(fin);
-        if (symbol == -1) return -1;
-        if (symbol == EOF_symbol) break;
+        if (symbol == -1) return -1;    // 异常处理
+        if (symbol == EOF_symbol) break;    // 结束
         ch = symbol - 1;
         fout.write((char*)&ch, sizeof(char));
         update_model(symbol);
