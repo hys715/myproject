@@ -5,14 +5,6 @@
 
 ---
 
-## **开发环境**  
-- **编译器 :** *g++*
-- **编辑器 :** *vscode*
-- **调试器 :** *gdb*
-- **编程语言 :** *c++*  
-
----
-
 ## **算法分析**  
 
 ### **算术编码**  
@@ -62,7 +54,8 @@ decode_symbol(value)
 ---
 
 **特别说明**  
-该算数编码方式采用固定统计模型，即预先获得字符频率，然后再进行编码。除固定统计模型外，还有自适应模型，即在最开始所有字符频率都相等，在读取字符的同时修改该字符的频率，只需扫描一遍文本，这种方法适用范围更广，效率更高，但较为复杂，后面我们使用自适应模型  
+该算数编码方式采用固定统计模型，即预先获得字符频率，然后再进行编码。除固定统计模型外，还有自适应模型。  
+**自适应模型 :**将所有字符频率初始化为1，在读取字符的同时修改该字符的频率，只需扫描一遍文本，这种方法适用范围更广，效率更高，但较为复杂，后面我们使用自适应模型  
 
 ---
 
@@ -83,7 +76,7 @@ decode_symbol(value)
 
 #### **编码**
 (1)**首先将所有字符频数初始化为1**，即a:1，b:1，c:1，total = 3，low=0000 0000，high=1111 1111  
-特别强调一点，abc的顺序是固定的，后面我们会用频数和来缩小区间，频数和如
+特别强调一点，abc的顺序是固定的，后面我们会用频数和来缩小区间，频数加和如
 sum_freq(a) = freq(a) = 1,  
 sum_freq(b) = freq(a) + freq(b) = 2,  
 sum_freq(c) = freq(a) + freq(b) + freq(c) = 3  
@@ -190,54 +183,42 @@ low=0111 1010, high=1110 0001, value=1101 0000, byte=000
 #ifndef MODEL_H
 #define MODEL_H
 
-#define Code_bits     16    // 编码位数，值为[0, 2^16)
-#define Top_value 0xffff    // 最大值2^16 - 1
+#define Code_value_bits 16  // 编码位数
+#define Top_value 0xffff    // 区间上界
+#define First_qtr 0x4000    // 1/4区间
+#define Half      0x8000    // 1/2区间
+#define Third_qtr 0xc000    // 3/4区间
 
-#define First_qtr 0x4000    // 第一个四等分点
-#define Half      0x8000    // 第二个四等分点
-#define Third_qtr 0xc000    // 第三个四等分点
+#define No_of_chars 256 // 字符总数
+#define EOF_symbol 256  // 自定义结束符
+#define Max_freq 0x3fff // 最大频数总和
 
-#define Num_of_chars 128    // 字符总数
-#define EOF_symbol   128    // 文件结束标志
-#define Max_freq  0x3fff    // 字符最大频数
+// freq[i]为字符频数，cum_freq[i]为频数加和
+// cum_freq[i] = freq[i+1] + freq[i+2] + ... + freq[No_of_chars]
+int cum_freq[No_of_chars + 1], freq[No_of_chars + 1];
 
-#define char_to_symbol(x) (x + 1)   // 字符->标志
-#define symbol_to_char(x) (x - 1)   // 标志->字符
+// 模型初始化
+void start_model() {
+    for (int i = 0; i <= No_of_chars; ++i)
+        cum_freq[i] = No_of_chars - i, freq[i] = 1;
+    freq[0] = 0;
+}
 
-// 概率模型
-class Model {
-private:
-    // freq[i]为第i个字符的频数，字符下标：1-127
-    // sum_freq[i] = freq[i + 1] + freq[i + 2] + ... + freq[Num_of_chars]
-    int freq[Num_of_chars + 1], sum_freq[Num_of_chars + 1];
-
-public:
-    Model() {
-        for (int i = 0; i <= Num_of_chars; ++i) {
-            freq[i] = 1;    // 将所有字符频数初始化为1
-            sum_freq[i] = Num_of_chars - i; // 计算频数和
+// 更新模型
+void update_model(int symbol) {
+    // 频数总和达到最大后，按1/2比例缩小
+    if (cum_freq[0] == Max_freq) {
+        int cum = 0;
+        for (int i = No_of_chars; i >= 0; --i) {
+            freq[i] = (freq[i] + 1) >> 1;   // 缩小
+            cum_freq[i] = cum;  // 计算新的加和
+            cum += freq[i];
         }
-        freq[0] = 0;    // '\0'不计算
     }
-
-    // 返回频数和
-    int &get_sum_freq(int symbol) { return sum_freq[symbol]; }
-
-    // 更新模型
-    void update(int symbol) {
-        if (sum_freq[0] == Max_freq) { // 频数和达到最大值
-            int ans = 0;
-            for (int i = Num_of_chars; i >= 0; --i) {
-                freq[i] = (freq[i] + 1) >> 1;   // 对频数进行放缩
-                sum_freq[i] = ans;  // 重新计算频数和
-                ans += freq[i];
-            }
-        }
-        ++freq[symbol]; // 更新symbol字符频数，同时更新频数和
-        for (int i = 0; i < symbol; ++i)
-            ++sum_freq[i];
-    }
-};
+    ++freq[symbol]; // 更新频数及加和
+    for (int i = 0; i < symbol; ++i)
+        ++cum_freq[i];
+}
 
 #endif
 ```
@@ -250,58 +231,50 @@ public:
 #include <iostream>
 #include <fstream>
 #include <string>
-using std::ifstream;
-using std::ofstream;
-using std::cerr;
-using std::ios;
-using std::string;
+using namespace std;
 
-class Bits {
-private:
-    // buffer为8位的缓冲区(声明成int是为了防止溢出)
-    // bits_counter代表buffer有效位数的
-    // eof_counter统计解压文件EOF的个数，目的是检查文件是否正确
-    int buffer, bits_counter, eof_counter;
+// buffer一字节缓冲区，暂存移出的高位，声明成int是为了防止溢出
+// bits_to_go为buffer中要处理的位数
+int buffer, bits_to_go;
 
-public:
-    // op主要判断Bits用于输入还是输出
-    Bits() : buffer(0), bits_counter(0), eof_counter(0) {}
+// 初始化读入
+void start_input_bits() { bits_to_go = 0; }
 
-    // 读入一个bit
-    char input_bit(ifstream &fin) {
-        if (bits_counter == 0) { // buffer已经清空
-            fin.read((char *)&buffer, sizeof(char));    // 读入一个字节
-            if (buffer == EOF) {    // 异常判断
-                ++eof_counter;
-                if (eof_counter == 5) { // 多统计几次，防止出错
-                    cerr << "Bad input file\n";
-                    return -1;
-                }
-            }
-            bits_counter = 8;   // buffer有效位为8
+// 读入bit
+int input_bit(ifstream& fin) {
+    if (bits_to_go == 0) {
+        if (fin.eof()) {    // 异常处理
+            cerr << "Bad input file!\n";
+            return -1;
         }
-        char bit = buffer & 1;  // 输出最低位
-        buffer >>= 1;
-        --bits_counter; // 有效位减一
-        return bit;
+        fin.read((char*)&buffer, sizeof(char)); // 读入一字节
+        bits_to_go = 8;
     }
+    int t = buffer & 1; // 取最低位
+    buffer >>= 1;
+    --bits_to_go;
+    return t;
+}
 
-    // 输出一个bit
-    void output_bit(char bit, ofstream &fout) {
-        buffer >>= 1;
-        if (bit) buffer |= 0x80;    // bit添加在最高位
-        ++bits_counter; // 有效位加一
-        if (bits_counter == 8) {    // buffer装满了
-            fout.write((char *)&buffer, sizeof(char));  // 写入文件
-            bits_counter = 0;   // 有效位清零
-        }
-    }
+// 初始化输出
+void start_output_bits() { buffer = 0, bits_to_go = 8; }
 
-    void done_output_bits(ofstream &fout) {
-        buffer >>= bits_counter ^ 7;    // 将有效位右移，无效的高位补0
-        fout.write((char *)&buffer, sizeof(char));  // 写入文件
+// 输出bit
+void output_bit(int bit, ofstream& fout) {
+    buffer >>= 1;
+    if (bit) buffer |= 0x80;    // bit存buffer的第8位
+    --bits_to_go;
+    if (bits_to_go == 0) {  // buffer无需要处理的位，写入文件
+        fout.write((char*)&buffer, sizeof(char));
+        bits_to_go = 8; // 重置
     }
-};
+}
+
+// 输出剩余位
+void done_output_bits(ofstream& fout) {
+    buffer >>= bits_to_go;  // 将有效位全移至右边
+    fout.write((char*)&buffer, sizeof(char));
+}
 
 #endif
 ```
@@ -311,91 +284,86 @@ public:
 #include "model.hpp"
 #include "bits.hpp"
 
-// low为下界，high为上界，bits_to_follow在区间扩展时做记录
-int low, high = Top_value, bits_to_follow;
-Bits bits;  // 创建Bits
-Model model;    // 创建模型
+// low区间下界，high区间上界
+// bits_to_follow记录放缩次数
+int low, high, bits_to_follow;
 
-// 这是一个奇妙的算法，具体原理请自行摸索
-void bit_plus_follow(char bit, ofstream &fout) {
-    bits.output_bit(bit, fout);
+// 关键算法，详见README.md
+void bit_plus_follow(int bit, ofstream& fout) {
+    output_bit(bit, fout);
     while (bits_to_follow > 0) {
-        bits.output_bit(!bit, fout);
+        output_bit(!bit, fout);
         --bits_to_follow;
     }
 }
 
-// 对symbol进行编码
-void encode_symbol(int symbol, ofstream &fout) {
-    int range = high - low + 1; // 区间大小
-    // 缩小区间从而编码symbol
-    high = low + range * model.get_sum_freq(symbol - 1) / model.get_sum_freq(0) - 1;
-    low = low + range * model.get_sum_freq(symbol) / model.get_sum_freq(0);
-    // 下面是区间的扩展
+// 编码准备
+void start_encode() {
+    low = bits_to_follow = 0;
+    high = Top_value;
+}
+
+// 编码symbol
+void encode_symbol(int symbol, ofstream& fout) {
+    int range = high - low + 1; // 区间[low, high]长度
+    // 由symbol重新确定low、high
+    high = low + range * cum_freq[symbol - 1] / cum_freq[0] - 1;
+    low = low + range * cum_freq[symbol] / cum_freq[0];
     while (true) {
-        if (high < Half) bit_plus_follow(0, fout);  // 最高位为0，输出0
+        // low、high第8位都为0
+        if (high < Half) bit_plus_follow(0, fout);
+        // low、high第8位都为1
         else if (low >= Half) {
-            bit_plus_follow(1, fout);   // 最高位为1，输出1，然后最高位置0
+            bit_plus_follow(1, fout);
             low -= Half;
             high -= Half;
         }
-        // First_qtr <= low < Half <= high < Third_qtr
-        // 请联系上述奇妙算法
+        // 关键算法，放缩
         else if (low >= First_qtr && high < Third_qtr) {
             ++bits_to_follow;
             low -= First_qtr;
             high -= First_qtr;
         }
         else break;
-        // 左移，扩大区间
+        // 左移扩大区间
         low = low << 1;
         high = (high << 1) | 1;
     }
 }
 
-// 结束编码，确定一个具体的value，以便后续解码
-void done_encode(ofstream &fout) {
+// 确定区间一个明确的数
+void done_encode(ofstream& fout) {
     ++bits_to_follow;
     if (low < First_qtr) bit_plus_follow(0, fout);
     else bit_plus_follow(1, fout);
 }
 
-int main(int argc, char *argv[]) {
-    // 函数参数判断
-    if (argc < 3 || argc > 3) {
-        if (argc == 1) cerr << "Source and target files are missing!\n";
-        else if (argc == 2)  cerr << "Target file is missing!\n";
-        else cerr << "~~~ERROR~~~\n";
-        return -1;
-    }
-
-    string srcFile(argv[1]), tarFile(argv[2]);  // 源文件与目标文件
+int main(int argc, char* argv[]) {
+    // 异常处理
+    if (argc < 3 || argc > 3) cerr << "Command error!\n";
+    string srcFile(argv[1]), tarFile(argv[2]);
     srcFile += ".txt", tarFile += ".arc";
-
-    ifstream fin(srcFile, ios::binary); // 二进制形式打开
+    ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
-    if (!fin.is_open()) {   // 是否正常打开
-        cerr << "Open file failed! Filename : " << srcFile << "\n";
-        return -1;
+    if (!fin.is_open() || !fout.is_open()) return -1;
+
+    // 正式编码
+    start_model();
+    start_output_bits();
+    start_encode();
+    int ch = 0, symbol = 0;
+    fin.read((char*)&ch, sizeof(char));
+    while (!fin.eof()) {
+        symbol = ch + 1;
+        encode_symbol(symbol, fout);
+        update_model(symbol);
+        fin.read((char*)&ch, sizeof(char));
     }
+    encode_symbol(EOF_symbol, fout);    // 添加自定义结束符
+    done_encode(fout);
+    done_output_bits(fout);
 
-    char head[3] = {'A', 'R', 'C'}; // 压缩文件的头部标识
-    fout.write((char*)head, sizeof(head));
-
-    char ch;
-    int symbol;
-    fin.read(&ch, sizeof(char));    // 读字节开始编码
-    while (!fin.eof()) {    // 文件是否结束
-        symbol = char_to_symbol(ch);    // 获得标志
-        encode_symbol(symbol, fout);    // 对标志编码
-        model.update(symbol);   // 更新模型
-        fin.read(&ch, sizeof(char));    // 读字节
-    }
-    encode_symbol(EOF_symbol, fout);    // 编码自定义文件结束符
-    done_encode(fout);  // 结束编码
-    bits.done_output_bits(fout);    // 将buffer清空
-
-    fin.close();    // 关闭文件
+    fin.close();
     fout.close();
     return 0;
 }
@@ -406,104 +374,77 @@ int main(int argc, char *argv[]) {
 #include "model.hpp"
 #include "bits.hpp"
 
-// low为下界，high为上界，value(16位)为判断的值
-int low, high = Top_value, value;
-Bits bits;  // 创建Bits
-Model model;    // 创建模型
+// low区间下界，high区间上界
+// value为压缩文件结果值
+int low, high, value;
 
-bool start(ifstream &fin) {
-    // 先读取16位数据到value中
-    for (int i = 1; i <= Code_bits; ++i) {
-        char bit = bits.input_bit(fin);
+// 开始译码
+bool start_decode(ifstream& fin) {
+    value = 0;
+    for (int i = 1; i <= Code_value_bits; ++i) {
+        int bit = input_bit(fin);
         if (bit == -1) return false;    // 异常处理
         value = (value << 1) | bit;
     }
+    low = 0, high = Top_value;
     return true;
 }
 
-// 解码
-int decode_symbol(ifstream &fin) {
-    int range = high - low + 1; // 区间
-    int cum = ((value - low + 1) * model.get_sum_freq(0) - 1) / range;  // 所占频数和
+// 译码得到symbol
+int decode_symbol(ifstream& fin) {
+    int range = high - low + 1; // 区间长度
+    int cum = ((value - low + 1) * cum_freq[0] - 1) / range; // value占比
     int symbol = 1;
-    while (model.get_sum_freq(symbol) > cum) ++symbol;  // 查找标志
-    // 找到标志后缩小区间
-    high = low + range * model.get_sum_freq(symbol - 1) / model.get_sum_freq(0) - 1;
-    low = low + range * model.get_sum_freq(symbol) / model.get_sum_freq(0);
-    // 区间扩展
+    while (cum_freq[symbol] > cum) ++symbol;    // 查找
+    high = low + range * cum_freq[symbol - 1] / cum_freq[0] - 1;    // 更新
+    low = low + range * cum_freq[symbol] / cum_freq[0];
     while (true) {
-        if (high < Half) {} // 最高位为0，不需要操作，对左移无影响
-        else if (low >= Half) { // 最高位为1，数据的值减Half
+        if (high < Half) {}
+        else if (low >= Half) {
             value -= Half;
             low -= Half;
             high -= Half;
         }
-        // 又是那个奇妙的算法
+        // 关键算法
         else if (low >= First_qtr && high < Third_qtr) {
             value -= First_qtr;
             low -= First_qtr;
             high -= First_qtr;
         }
         else break;
-        // 左移，扩大区间，记得value也要跟着左移
         low <<= 1;
         high = (high << 1) | 1;
-        
-        char bit = bits.input_bit(fin);
+        int bit = input_bit(fin);
         if (bit == -1) return -1;   // 异常处理
         value = (value << 1) | bit;
     }
     return symbol;
 }
 
-int main(int argc, char *argv[]) {
-    // 函数参数判断
-    if (argc < 3 || argc > 3) {
-        if (argc == 1) cerr << "Source and target files are missing!\n";
-        else if (argc == 2)  cerr << "Target file is missing!\n";
-        else cerr << "~~~ERROR~~~\n";
-        return -1;
-    }
-
-    string srcFile(argv[1]), tarFile(argv[2]);  // 源文件与目标文件
-    srcFile += ".arc", tarFile += ".txt";
-
-    ifstream fin(srcFile, ios::binary); // 二进制形式打开
+int main(int argc, char* argv[]) {
+    // 异常处理
+    if (argc < 3 || argc > 3) cerr << "Command error!\n";
+    string srcFile(argv[1]), tarFile(argv[2]);
+    srcFile += ".txt", tarFile += ".arc";
+    ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
-    if (!fin.is_open()) {   // 是否正常打开
-        cerr << "Open file failed! Filename : " << srcFile << "\n";
-        return -1;
-    }
+    if (!fin.is_open() || !fout.is_open()) return -1;
 
-    // 识别文件头部标识
-    char head[3];
-    fin.read((char*)head, sizeof(head));
-    if (head[0] != 'A' || head[1] != 'R' || head[2] != 'C') {
-        cerr << "Bad input file\n";
-        return -1;
-    }
-
-    char ch;
-    int symbol;
-    // 预处理
-    if (!start(fin)) {
-        cerr << "Bad input file\n";
-        return -1;
-    }
-    // 开始解码
+    // 正式解码
+    start_model();
+    start_input_bits();
+    start_decode(fin);
     while (true) {
-        symbol = decode_symbol(fin);    // 获得标志
-        if (symbol == -1) { // 异常处理
-            cerr << "Bad input file1\n";
-            return -1;
-        }
-        if (symbol == EOF_symbol) break;    // 判断文件结尾
-        ch = symbol_to_char(symbol);    // 获得字符
-        fout.write(&ch, sizeof(char));  // 写入文件
-        model.update(symbol);   // 更新模型
+        int ch, symbol;
+        symbol = decode_symbol(fin);
+        if (symbol == -1) return -1;
+        if (symbol == EOF_symbol) break;
+        ch = symbol - 1;
+        fout.write((char*)&ch, sizeof(char));
+        update_model(symbol);
     }
-    
-    fin.close();    // 关闭文件
+
+    fin.close();
     fout.close();
     return 0;
 }

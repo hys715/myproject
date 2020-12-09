@@ -4,57 +4,49 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-using std::ifstream;
-using std::ofstream;
-using std::cerr;
-using std::ios;
-using std::string;
+using namespace std;
 
-class Bits {
-private:
-    // buffer为8位的缓冲区(声明成int是为了防止溢出)
-    // bits_counter代表buffer有效位数的
-    // eof_counter统计解压文件EOF的个数，目的是检查文件是否正确
-    int buffer, bits_counter, eof_counter;
+// buffer一字节缓冲区，暂存移出的高位，声明成int是为了防止溢出
+// bits_to_go为buffer中要处理的位数
+int buffer, bits_to_go;
 
-public:
-    // 初始化
-    Bits() : buffer(0), bits_counter(0), eof_counter(0) {}
+// 初始化读入
+void start_input_bits() { bits_to_go = 0; }
 
-    // 读入一个bit
-    char input_bit(ifstream &fin) {
-        if (bits_counter == 0) { // buffer已经清空
-            fin.read((char *)&buffer, sizeof(char));    // 读入一个字节
-            if (buffer == EOF) {    // 异常判断
-                ++eof_counter;
-                if (eof_counter == 5) { // 多统计几次，防止出错
-                    cerr << "Bad input file\n";
-                    return -1;
-                }
-            }
-            bits_counter = 8;   // buffer有效位为8
+// 读入bit
+int input_bit(ifstream& fin) {
+    if (bits_to_go == 0) {
+        if (fin.eof()) {    // 异常处理
+            cerr << "Bad input file!\n";
+            return -1;
         }
-        char bit = buffer & 1;  // 输出最低位
-        buffer >>= 1;
-        --bits_counter; // 有效位减一
-        return bit;
+        fin.read((char*)&buffer, sizeof(char)); // 读入一字节
+        bits_to_go = 8;
     }
+    int t = buffer & 1; // 取最低位
+    buffer >>= 1;
+    --bits_to_go;
+    return t;
+}
 
-    // 输出一个bit
-    void output_bit(char bit, ofstream &fout) {
-        buffer >>= 1;
-        if (bit) buffer |= 0x80;    // bit添加在最高位
-        ++bits_counter; // 有效位加一
-        if (bits_counter == 8) {    // buffer装满了
-            fout.write((char *)&buffer, sizeof(char));  // 写入文件
-            bits_counter = 0;   // 有效位清零
-        }
-    }
+// 初始化输出
+void start_output_bits() { buffer = 0, bits_to_go = 8; }
 
-    void done_output_bits(ofstream &fout) {
-        buffer >>= bits_counter ^ 7;    // 将有效位右移，无效的高位补0
-        fout.write((char *)&buffer, sizeof(char));  // 写入文件
+// 输出bit
+void output_bit(int bit, ofstream& fout) {
+    buffer >>= 1;
+    if (bit) buffer |= 0x80;    // bit存buffer的第8位
+    --bits_to_go;
+    if (bits_to_go == 0) {  // buffer无需要处理的位，写入文件
+        fout.write((char*)&buffer, sizeof(char));
+        bits_to_go = 8; // 重置
     }
-};
+}
+
+// 输出剩余位
+void done_output_bits(ofstream& fout) {
+    buffer >>= bits_to_go;  // 将有效位全移至右边
+    fout.write((char*)&buffer, sizeof(char));
+}
 
 #endif
