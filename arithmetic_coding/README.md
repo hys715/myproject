@@ -189,8 +189,8 @@ low=0111 1010, high=1110 0001, value=1101 0000, byte=000
 #define Half      0x8000    // 1/2区间
 #define Third_qtr 0xc000    // 3/4区间
 
-#define No_of_chars 256 // 字符总数
-#define EOF_symbol 256  // 自定义结束符
+#define No_of_chars 257 // 字符总数
+#define EOF_symbol 257  // 自定义结束符
 #define Max_freq 0x3fff // 最大频数总和
 
 // freq[i]为字符频数，cum_freq[i]为频数加和
