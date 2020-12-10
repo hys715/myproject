@@ -5,6 +5,45 @@
 
 ---
 
+## **运行说明**  
+- **环境配置**  
+
+编译器(个人用的编译器为MinGW/g++8.1.0版本，不过应该正常点的g++应该都能编译，Windows/Linux均可)
+```
+g++ version >= 8.1.0
+```
+
+使用前先将g++添加到环境变量，若g++版本较低导致编译失败，请先升级版本  
+终端查看g++版本的命令(若无版本信息则说明g++不在环境变量中，请自行百度如何添加环境变量)
+```
+g++ -v
+```
+
+- **编译**  
+
+打开终端，进入源文件所在目录(四个文件应在同一目录下)，执行下列命令
+```
+g++ ziptxt.cpp -o ziptxt
+g++ unziptxt.cpp -o unziptxt
+```
+将生成的ziptxt和unziptxt添加到环境变量中  
+
+- **运行**  
+
+打开终端，进入需要压缩和解压的文本文件的目录，执行下列命令  
+```
+// 注意: 文件名均不加后缀
+// Windows cmd
+ziptxt <sourseFileName> <targetFileName>  // 压缩
+unziptxt <sourseFileName> <targetFileName>  // 解压
+
+// Windows powershell / Linux bash ...
+./ziptxt <sourseFileName> <targetFileName>  // 压缩
+./unziptxt <sourseFileName> <targetFileName>  // 解压
+```
+
+---
+
 ## **算法分析**  
 
 ### **算术编码**  
@@ -189,35 +228,36 @@ low=0111 1010, high=1110 0001, value=1101 0000, byte=000
 #define Half      0x8000    // 1/2区间
 #define Third_qtr 0xc000    // 3/4区间
 
-#define No_of_chars 257 // 字符总数
-#define EOF_symbol 257  // 自定义结束符
+#define No_of_symbols 257 // 字符总数0-256
+#define EOF_symbol 256  // 自定义结束符
 #define Max_freq 0x3fff // 最大频数总和
 
-// freq[i]为字符频数，cum_freq[i]为频数加和
-// cum_freq[i] = freq[i+1] + freq[i+2] + ... + freq[No_of_chars]
-int cum_freq[No_of_chars + 1], freq[No_of_chars + 1];
+// freq[i]为字符频数，ans_freq[i]为频数前缀和
+// ans_freq[i] = freq[0] + freq[1] + ... + freq[i - 1]
+// ans_freq[0] = 0
+int ans_freq[No_of_symbols + 1], freq[No_of_symbols + 1];
 
 // 模型初始化
 void start_model() {
-    for (int i = 0; i <= No_of_chars; ++i)
-        cum_freq[i] = No_of_chars - i, freq[i] = 1;
-    freq[0] = 0;
+    for (int i = 0; i <= No_of_symbols; ++i)
+        ans_freq[i] = i, freq[i] = 1;
+    freq[257] = 0; // 257不是字符
 }
 
 // 更新模型
 void update_model(int symbol) {
     // 频数总和达到最大后，按1/2比例缩小
-    if (cum_freq[0] == Max_freq) {
-        int cum = 0;
-        for (int i = No_of_chars; i >= 0; --i) {
+    if (ans_freq[No_of_symbols] == Max_freq) {
+        int ans = 0;
+        for (int i = 0; i <= No_of_symbols; ++i) {
             freq[i] = (freq[i] + 1) >> 1;   // 缩小
-            cum_freq[i] = cum;  // 计算新的加和
-            cum += freq[i];
+            ans_freq[i] = ans;  // 计算新的加和
+            ans += freq[i];
         }
     }
     ++freq[symbol]; // 更新频数及加和
-    for (int i = 0; i < symbol; ++i)
-        ++cum_freq[i];
+    for (int i = symbol + 1; i <= No_of_symbols; ++i)
+        ++ans_freq[i];
 }
 
 #endif
@@ -307,8 +347,8 @@ void start_encode() {
 void encode_symbol(int symbol, ofstream& fout) {
     int range = high - low + 1; // 区间[low, high]长度
     // 由symbol重新确定low、high
-    high = low + range * cum_freq[symbol - 1] / cum_freq[0] - 1;
-    low = low + range * cum_freq[symbol] / cum_freq[0];
+    high = low + range * ans_freq[symbol + 1] / ans_freq[No_of_symbols] - 1;
+    low = low + range * ans_freq[symbol] / ans_freq[No_of_symbols];
     while (true) {
         // low、high第8位都为0
         if (high < Half) bit_plus_follow(0, fout);
@@ -345,22 +385,18 @@ int main(int argc, char* argv[]) {
     srcFile += ".txt", tarFile += ".arc";
     ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
-    if (!fin.is_open() || !fout.is_open()) {
-        cerr << "Fail to open files!\n";
-        return -1;
-    }
+    if (!fin.is_open() || !fout.is_open()) return -1;
 
     // 正式编码
     start_model();
     start_output_bits();
     start_encode();
-    int ch = 0, symbol = 0;
-    fin.read((char*)&ch, sizeof(char));
+    int symbol = 0;
+    fin.read((char*)&symbol, sizeof(char));
     while (!fin.eof()) {
-        symbol = ch + 1;
         encode_symbol(symbol, fout);
         update_model(symbol);
-        fin.read((char*)&ch, sizeof(char));
+        fin.read((char*)&symbol, sizeof(char));
     }
     encode_symbol(EOF_symbol, fout);    // 添加自定义结束符
     done_encode(fout);
@@ -396,12 +432,12 @@ bool start_decode(ifstream& fin) {
 // 译码得到symbol
 int decode_symbol(ifstream& fin) {
     int range = high - low + 1; // 区间长度
-    int cum = ((value - low + 1) * cum_freq[0] - 1) / range; // value占比
-    int symbol = 1;
-    while (cum_freq[symbol] > cum) ++symbol;    // 查找
+    int ans = ((value - low + 1) * ans_freq[No_of_symbols] - 1) / range; // value占比
+    int symbol = No_of_symbols - 1;
+    while (ans_freq[symbol] > ans) --symbol;    // 查找
     if (symbol == EOF_symbol) return symbol;
-    high = low + range * cum_freq[symbol - 1] / cum_freq[0] - 1;    // 更新
-    low = low + range * cum_freq[symbol] / cum_freq[0];
+    high = low + range * ans_freq[symbol + 1] / ans_freq[No_of_symbols] - 1;    // 更新
+    low = low + range * ans_freq[symbol] / ans_freq[No_of_symbols];
     while (true) {
         if (high < Half) {}
         else if (low >= Half) {
@@ -419,7 +455,9 @@ int decode_symbol(ifstream& fin) {
         low <<= 1;
         high = (high << 1) | 1;
         int bit = input_bit(fin);
-        if (bit == -1) return -1;   // 异常处理
+        if (bit == -1) {
+            return -1;   // 异常处理
+        }
         value = (value << 1) | bit;
     }
     return symbol;
@@ -432,22 +470,18 @@ int main(int argc, char* argv[]) {
     srcFile += ".arc", tarFile += ".txt";
     ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
-    if (!fin.is_open() || !fout.is_open()) {
-        cerr << "Fail to open files!\n";
-        return -1;
-    }
+    if (!fin.is_open() || !fout.is_open()) return -1;
 
     // 正式解码
     start_model();
     start_input_bits();
     start_decode(fin);
+    int symbol = 0;
     while (true) {
-        int ch, symbol;
         symbol = decode_symbol(fin);
-        if (symbol == -1) return -1;    // 异常处理
-        if (symbol == EOF_symbol) break;    // 结束
-        ch = symbol - 1;
-        fout.write((char*)&ch, sizeof(char));
+        if (symbol == -1) return -1;
+        if (symbol == EOF_symbol) break;
+        fout.write((char*)&symbol, sizeof(char));
         update_model(symbol);
     }
 

@@ -20,12 +20,12 @@ bool start_decode(ifstream& fin) {
 // 译码得到symbol
 int decode_symbol(ifstream& fin) {
     int range = high - low + 1; // 区间长度
-    int cum = ((value - low + 1) * cum_freq[0] - 1) / range; // value占比
-    int symbol = 1;
-    while (cum_freq[symbol] > cum) ++symbol;    // 查找
+    int ans = ((value - low + 1) * ans_freq[No_of_symbols] - 1) / range; // value占比
+    int symbol = No_of_symbols - 1;
+    while (ans_freq[symbol] > ans) --symbol;    // 查找
     if (symbol == EOF_symbol) return symbol;
-    high = low + range * cum_freq[symbol - 1] / cum_freq[0] - 1;    // 更新
-    low = low + range * cum_freq[symbol] / cum_freq[0];
+    high = low + range * ans_freq[symbol + 1] / ans_freq[No_of_symbols] - 1;    // 更新
+    low = low + range * ans_freq[symbol] / ans_freq[No_of_symbols];
     while (true) {
         if (high < Half) {}
         else if (low >= Half) {
@@ -43,7 +43,9 @@ int decode_symbol(ifstream& fin) {
         low <<= 1;
         high = (high << 1) | 1;
         int bit = input_bit(fin);
-        if (bit == -1) return -1;   // 异常处理
+        if (bit == -1) {
+            return -1;   // 异常处理
+        }
         value = (value << 1) | bit;
     }
     return symbol;
@@ -56,22 +58,18 @@ int main(int argc, char* argv[]) {
     srcFile += ".arc", tarFile += ".txt";
     ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
-    if (!fin.is_open() || !fout.is_open()) {
-        cerr << "Fail to open files!\n";
-        return -1;
-    }
+    if (!fin.is_open() || !fout.is_open()) return -1;
 
     // 正式解码
     start_model();
     start_input_bits();
     start_decode(fin);
+    int symbol = 0;
     while (true) {
-        int ch, symbol;
         symbol = decode_symbol(fin);
-        if (symbol == -1) return -1;    // 异常处理
-        if (symbol == EOF_symbol) break;    // 结束
-        ch = symbol - 1;
-        fout.write((char*)&ch, sizeof(char));
+        if (symbol == -1) return -1;
+        if (symbol == EOF_symbol) break;
+        fout.write((char*)&symbol, sizeof(char));
         update_model(symbol);
     }
 

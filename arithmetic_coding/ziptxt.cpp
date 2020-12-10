@@ -24,8 +24,8 @@ void start_encode() {
 void encode_symbol(int symbol, ofstream& fout) {
     int range = high - low + 1; // 区间[low, high]长度
     // 由symbol重新确定low、high
-    high = low + range * cum_freq[symbol - 1] / cum_freq[0] - 1;
-    low = low + range * cum_freq[symbol] / cum_freq[0];
+    high = low + range * ans_freq[symbol + 1] / ans_freq[No_of_symbols] - 1;
+    low = low + range * ans_freq[symbol] / ans_freq[No_of_symbols];
     while (true) {
         // low、high第8位都为0
         if (high < Half) bit_plus_follow(0, fout);
@@ -62,22 +62,18 @@ int main(int argc, char* argv[]) {
     srcFile += ".txt", tarFile += ".arc";
     ifstream fin(srcFile, ios::binary);
     ofstream fout(tarFile, ios::binary);
-    if (!fin.is_open() || !fout.is_open()) {
-        cerr << "Fail to open files!\n";
-        return -1;
-    }
+    if (!fin.is_open() || !fout.is_open()) return -1;
 
     // 正式编码
     start_model();
     start_output_bits();
     start_encode();
-    int ch = 0, symbol = 0;
-    fin.read((char*)&ch, sizeof(char));
+    int symbol = 0;
+    fin.read((char*)&symbol, sizeof(char));
     while (!fin.eof()) {
-        symbol = ch + 1;
         encode_symbol(symbol, fout);
         update_model(symbol);
-        fin.read((char*)&ch, sizeof(char));
+        fin.read((char*)&symbol, sizeof(char));
     }
     encode_symbol(EOF_symbol, fout);    // 添加自定义结束符
     done_encode(fout);
