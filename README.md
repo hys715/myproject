@@ -1,2 +1,2 @@
 # myproject
-Algorithe Coding with ASCII
+arithmetic coding with ASCII
